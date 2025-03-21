@@ -1,5 +1,7 @@
 # MP-20
 
+** This dataset was collected by Tian Xie et al., and the original link is: [Original Source](https://github.com/txie-93/cdvae/tree/main/data/mp_20)
+
 MP-20 contains 45231 general inorganic materials that differ in both structure and composition. There are 89 elements and the materials have 1 - 20 atoms in the unit cells. MP-20 includes most experimentally known materials with no more than 20 atoms in unit cell.
 
 ## What is in the dataset
@@ -13,7 +15,7 @@ All 45231 are experimentally synthesizable. All materials are at local energy mi
 ## Visualization of structures
 
 <p align="center">
-  <img src="../../assets/mp_20.png" />
+  <img src="../../src/mp_20.png" />
 </p>
 
 ## Citation
