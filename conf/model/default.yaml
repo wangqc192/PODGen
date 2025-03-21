@@ -1,0 +1,23 @@
+_target_: CFtorch.pl_modules.model.CrystalFormer
+
+Nf: ${data.Nf} #help=#'number of frequencies for fc'
+n_max: ${data.n_max}
+n_grou_types: 230
+n_atom_types: ${data.n_atom_types}
+n_wyck_types: ${data.n_wyck_types}
+Kx: 16 #help=#'number of modes in x'
+Kl: 4 #help=#'number of modes in lattice'
+h0_size: 256 #help=#'hidden layer dimension for the first atom, 0 means we simply use a table for first aw_logit'#256
+transformer_layers: 16 #help=#'The number of layers in transformer'#16
+num_heads: 16 #help=#'The number of heads'#16
+key_size: 64 #help=#'The key size'#64
+value_size: 64 #help=#'The key size'#64
+model_size: 64 #help=#'The model size'#64
+embed_size: 32 #help=#'The enbedding size'#32
+dropout_rate: 0.5 #help=#'The dropout rate'
+widering_facter: 4
+sigmamin: 0.001
+
+lamb_a: 1
+lamb_w: 1
+lamb_l: 1

@@ -1,0 +1,130 @@
+data:
+  root_path: ${oc.env:PROJECT_ROOT}/data/Alex
+  use_exit: true
+  preprocess_workers: 40
+  n_atom_types: 119
+  n_wyck_types: 28
+  n_max: 21
+  tol: 0.1
+  Nf: 5
+  train_max_epochs: 10000
+  early_stopping_patience: 1000
+  datamodule:
+    _target_: CFtorch.pl_data.datamodule.CrystDataModule
+    datasets:
+      train:
+        _target_: CFtorch.pl_data.dataset.CrystDataset
+        path: ${data.root_path}/train.csv
+        use_exit: ${data.use_exit}
+        save_path: ${data.root_path}/train_sym.pt
+        preprocess_workers: ${data.preprocess_workers}
+        n_atom_types: ${data.n_atom_types}
+        n_wyck_types: ${data.n_wyck_types}
+        n_max: ${data.n_max}
+        tol: ${data.tol}
+        Nf: ${data.Nf}
+      val:
+      - _target_: CFtorch.pl_data.dataset.CrystDataset
+        path: ${data.root_path}/val.csv
+        use_exit: ${data.use_exit}
+        save_path: ${data.root_path}/val_sym.pt
+        preprocess_workers: ${data.preprocess_workers}
+        n_atom_types: ${data.n_atom_types}
+        n_wyck_types: ${data.n_wyck_types}
+        n_max: ${data.n_max}
+        tol: ${data.tol}
+        Nf: ${data.Nf}
+      test:
+      - _target_: CFtorch.pl_data.dataset.CrystDataset
+        path: ${data.root_path}/test.csv
+        use_exit: ${data.use_exit}
+        save_path: ${data.root_path}/test_sym.pt
+        preprocess_workers: ${data.preprocess_workers}
+        n_atom_types: ${data.n_atom_types}
+        n_wyck_types: ${data.n_wyck_types}
+        n_max: ${data.n_max}
+        tol: ${data.tol}
+        Nf: ${data.Nf}
+    num_workers:
+      train: 0
+      val: 0
+      test: 0
+    batch_size:
+      train: 512
+      val: 512
+      test: 512
+logging:
+  val_check_interval: 1
+  progress_bar_refresh_rate: 20
+  csvlogger:
+    name: ${expname}
+  lr_monitor:
+    logging_interval: step
+    log_momentum: false
+model:
+  _target_: CFtorch.pl_modules.model.CrystalFormer
+  Nf: ${data.Nf}
+  n_max: ${data.n_max}
+  n_grou_types: 230
+  n_atom_types: ${data.n_atom_types}
+  n_wyck_types: ${data.n_wyck_types}
+  Kx: 16
+  Kl: 4
+  h0_size: 256
+  transformer_layers: 16
+  num_heads: 16
+  key_size: 64
+  value_size: 64
+  model_size: 64
+  embed_size: 32
+  dropout_rate: 0.5
+  widering_facter: 4
+  sigmamin: 0.001
+  lamb_a: 1
+  lamb_w: 1
+  lamb_l: 1
+optim:
+  optimizer:
+    _target_: torch.optim.Adam
+    lr: 0.0001
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    weight_decay: 0
+  use_lr_scheduler: true
+  lr_scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    factor: 0.6
+    patience: 30
+    min_lr: 1.0e-06
+train:
+  deterministic: true
+  random_seed: 42
+  use_exit: true
+  pl_trainer:
+    fast_dev_run: false
+    devices: 4
+    strategy: ddp
+    accelerator: cuda
+    precision: 32
+    max_epochs: ${data.train_max_epochs}
+    accumulate_grad_batches: 1
+    num_sanity_val_steps: 2
+    gradient_clip_val: 0.5
+    gradient_clip_algorithm: value
+    profiler: simple
+  monitor_metric: val_loss
+  monitor_metric_mode: min
+  early_stopping:
+    patience: ${data.early_stopping_patience}
+    verbose: false
+  model_checkpoints:
+    save_top_k: 3
+    verbose: false
+    save_last: true
+expname: Alex
+core:
+  version: 0.0.1
+  tags:
+  - ${now:%Y-%m-%d}

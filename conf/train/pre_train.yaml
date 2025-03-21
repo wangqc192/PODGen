@@ -1,0 +1,9 @@
+# reproducibility
+deterministic: True
+random_seed: 123
+
+print_freq: 20
+
+start_epochs: 0
+max_epochs: 1000
+most_patience: 100

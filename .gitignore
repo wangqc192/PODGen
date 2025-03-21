@@ -1,0 +1,9 @@
+data/mp_20/*.pt
+
+podgen/mc_gen/*
+
+output/*
+
+LogErr
+
+*.sh

@@ -1,0 +1,133 @@
+data:
+  root_path: ${oc.env:PROJECT_ROOT}/data/materiae
+  prop:
+  - formation_energy_per_atom
+  - band_gap
+  - e_above_hull
+  - soc_topo_class
+  - nsoc_topo_class
+  - soc_topo
+  - nsoc_topo
+  use_prop: soc_topo_class
+  num_targets: 5
+  niggli: true
+  primitive: false
+  graph_method: mindistance
+  lattice_scale_method: scale_length
+  preprocess_workers: 60
+  readout: mean
+  max_atoms: 40
+  otf_graph: false
+  eval_model_name: mp40
+  tolerance: 0.1
+  use_space_group: true
+  use_pos_index: false
+  train_max_epochs: 5
+  early_stopping_patience: 100000
+  teacher_forcing_max_epoch: 500
+  datamodule:
+    _target_: data.CrystDataModule
+    accelerator: ${accelerator}
+    datasets:
+      train:
+        _target_: data.CrystDataset
+        name: Formation energy train
+        path: ${data.root_path}/train.csv
+        save_path: ${data.root_path}/train_sym.pt
+        prop: ${data.prop}
+        use_prop: ${data.use_prop}
+        num_targets: ${data.num_targets}
+        niggli: ${data.niggli}
+        primitive: ${data.primitive}
+        graph_method: ${data.graph_method}
+        tolerance: ${data.tolerance}
+        use_space_group: ${data.use_space_group}
+        use_pos_index: ${data.use_pos_index}
+        lattice_scale_method: ${data.lattice_scale_method}
+        preprocess_workers: ${data.preprocess_workers}
+      val:
+      - _target_: data.CrystDataset
+        name: Formation energy val
+        path: ${data.root_path}/val.csv
+        save_path: ${data.root_path}/val_sym.pt
+        prop: ${data.prop}
+        use_prop: ${data.use_prop}
+        num_targets: ${data.num_targets}
+        niggli: ${data.niggli}
+        primitive: ${data.primitive}
+        graph_method: ${data.graph_method}
+        tolerance: ${data.tolerance}
+        use_space_group: ${data.use_space_group}
+        use_pos_index: ${data.use_pos_index}
+        lattice_scale_method: ${data.lattice_scale_method}
+        preprocess_workers: ${data.preprocess_workers}
+      test:
+      - _target_: data.CrystDataset
+        name: Formation energy test
+        path: ${data.root_path}/test.csv
+        save_path: ${data.root_path}/test_sym.pt
+        prop: ${data.prop}
+        use_prop: ${data.use_prop}
+        num_targets: ${data.num_targets}
+        niggli: ${data.niggli}
+        primitive: ${data.primitive}
+        graph_method: ${data.graph_method}
+        tolerance: ${data.tolerance}
+        use_space_group: ${data.use_space_group}
+        use_pos_index: ${data.use_pos_index}
+        lattice_scale_method: ${data.lattice_scale_method}
+        preprocess_workers: ${data.preprocess_workers}
+    num_workers:
+      train: 0
+      val: 0
+      test: 0
+    batch_size:
+      train: 512
+      val: 512
+      test: 512
+train:
+  deterministic: true
+  random_seed: 123
+  print_freq: 20
+  start_epochs: 0
+  max_epochs: 50
+  most_patience: 100
+model:
+  _target_: model.DimeNetPlusPlusWrap
+  num_targets: ${data.num_targets}
+  hidden_channels: 32
+  num_blocks: 2
+  int_emb_size: 16
+  basis_emb_size: 4
+  out_emb_channels: 8
+  num_spherical: 3
+  num_radial: 3
+  otf_graph: ${data.otf_graph}
+  cutoff: 7.0
+  max_num_neighbors: 20
+  envelope_exponent: 6
+  num_before_skip: 1
+  num_after_skip: 2
+  num_output_layers: 2
+  readout: ${data.readout}
+optim:
+  optimizer:
+    _target_: torch.optim.Adam
+    lr: 0.001
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    weight_decay: 0
+  use_lr_scheduler: true
+  lr_scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    factor: 0.6
+    patience: 30
+    min_lr: 1.0e-05
+expname: newtopo
+core:
+  version: 0.0.1
+  tags:
+  - ${now:%Y-%m-%d}
+accelerator: gpu

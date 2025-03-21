@@ -1,0 +1,11 @@
+# log frequency
+val_check_interval: 1
+progress_bar_refresh_rate: 20
+
+
+csvlogger:
+  name: ${expname}
+
+lr_monitor:
+  logging_interval: "step"
+  log_momentum: False

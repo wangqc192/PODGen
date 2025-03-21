@@ -1,0 +1,64 @@
+root_path: ${oc.env:PROJECT_ROOT}/data/Alex
+use_exit: True
+preprocess_workers: 40
+
+n_atom_types: 119
+n_wyck_types: 28
+n_max: 21
+tol: 0.1
+Nf: 5  #Fourier series order
+
+train_max_epochs: 10000
+early_stopping_patience: 1000
+
+datamodule:
+  _target_: CFtorch.pl_data.datamodule.CrystDataModule
+
+  datasets:
+    train:
+      _target_: CFtorch.pl_data.dataset.CrystDataset
+      path: ${data.root_path}/train.csv
+      use_exit: ${data.use_exit}
+      save_path: ${data.root_path}/train_sym.pt
+      preprocess_workers: ${data.preprocess_workers}
+      n_atom_types: ${data.n_atom_types}
+      n_wyck_types: ${data.n_wyck_types}
+      n_max: ${data.n_max}
+      tol: ${data.tol}
+      Nf: ${data.Nf}
+
+
+    val:
+      - _target_: CFtorch.pl_data.dataset.CrystDataset
+        path: ${data.root_path}/val.csv
+        use_exit: ${data.use_exit}
+        save_path: ${data.root_path}/val_sym.pt
+        preprocess_workers: ${data.preprocess_workers}
+        n_atom_types: ${data.n_atom_types}
+        n_wyck_types: ${data.n_wyck_types}
+        n_max: ${data.n_max}
+        tol: ${data.tol}
+        Nf: ${data.Nf}
+
+    test:
+      - _target_: CFtorch.pl_data.dataset.CrystDataset
+        path: ${data.root_path}/test.csv
+        use_exit: ${data.use_exit}
+        save_path: ${data.root_path}/test_sym.pt
+        preprocess_workers: ${data.preprocess_workers}
+        n_atom_types: ${data.n_atom_types}
+        n_wyck_types: ${data.n_wyck_types}
+        n_max: ${data.n_max}
+        tol: ${data.tol}
+        Nf: ${data.Nf}
+
+
+  num_workers:
+    train: 0
+    val: 0
+    test: 0
+
+  batch_size:
+    train: 256
+    val: 256
+    test: 256
