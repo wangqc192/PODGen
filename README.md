@@ -55,6 +55,8 @@ export HYDRA_JOBS="<YOUR_PATH_TO_PODGEN>/PODGen/output/hydra"
 export WABDB_DIR="<YOUR_PATH_TO_PODGEN>/PODGen/output/wandb"
 ```
 
+Download the model checkpoint from [this link](https://in.iphy.ac.cn/eln/link.html#/113/G9f5), and save the file ```epoch=645-step=1881798.ckpt``` to the ```src/models/Alex``` directory.
+
 
 Then you can run the following command to generate crystal structures:
 ```
