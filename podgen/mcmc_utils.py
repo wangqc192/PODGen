@@ -201,7 +201,7 @@ def logp_of_pre(structures, pre_models, pre_models_config,temperature=1.0, num_i
     num_bonds_list = []
     batch_list = []
     i = 0
-    print(pre_models_config)
+    # print(pre_models_config)
 
     graphes = p_map(build_crystal_graph,
                     structures,

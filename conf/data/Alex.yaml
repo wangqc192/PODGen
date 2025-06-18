@@ -1,4 +1,4 @@
-root_path: ${oc.env:PROJECT_ROOT}/data/Alex
+root_path: /data/home/cyye/5-materialgen/7-cdvae/CrystalFormer_torch/data/Alex
 use_exit: True
 preprocess_workers: 40
 
@@ -59,6 +59,6 @@ datamodule:
     test: 0
 
   batch_size:
-    train: 256
-    val: 256
-    test: 256
+    train: 128
+    val: 128
+    test: 128

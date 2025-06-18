@@ -133,7 +133,7 @@ def run(cfg):
 
 @hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="default")
 def main(cfg: omegaconf.DictConfig):
-    print(cfg)
+    # print(cfg)
     run(cfg)
 
 

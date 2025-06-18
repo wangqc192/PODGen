@@ -317,13 +317,14 @@ class CrystalFormer(BaseModule):
             [self.hparams.Kl, 6 * self.hparams.Kl, 6 * self.hparams.Kl], dim=-1)
 
         lattice = data['lattice'].unsqueeze(1).repeat(1, 1, self.hparams.Kl, 1)
-        lattice_mask = lattice_mask.unsqueeze(1).unsqueeze(2).repeat(1, 1, self.hparams.Kl, 1)
-        mu = mu.view(mu.size()[0], mu.size()[1], self.hparams.Kl, 6)
+        lattice_mask = lattice_mask.unsqueeze(1)
+        mu = mu.view(mu.size()[0], mu.size()[1], self.hparams.Kl, 6)                           # (batch_size, 1, kl, 6)
         sigma = sigma.view(sigma.size()[0], sigma.size()[1], self.hparams.Kl, 6)
 
         logp_l = -(lattice - mu) ** 2 / (2 * sigma ** 2) - torch.log(sigma) - 0.5 * math.log(2 * math.pi)
+        l_logit = l_logit.unsqueeze(-1).repeat(1, 1, 1, 6)
+        logp_l = torch.logsumexp(l_logit + logp_l, dim=-2) # (batch_size, 1, 6)
         logp_l = torch.sum(torch.where(lattice_mask, logp_l, torch.zeros_like(logp_l)), dim=-1)
-        logp_l = torch.logsumexp(l_logit + logp_l, dim=-1)
 
         logp_a = torch.sum(logp_a, dim=-1)
         logp_w = torch.sum(logp_w, dim=-1)
@@ -413,19 +414,21 @@ class CrystalFormer(BaseModule):
         l_logit = F.log_softmax(logits, dim=-1)
 
         lattice = data['lattice'].unsqueeze(1).repeat(1, 1, self.hparams.Kl, 1)
-        lattice_mask = lattice_mask.unsqueeze(1).unsqueeze(2).repeat(1, 1, self.hparams.Kl, 1)
-        mu = mu.view(mu.size()[0], mu.size()[1], self.hparams.Kl, 6)
+        lattice_mask = lattice_mask.unsqueeze(1)
+        mu = mu.view(mu.size()[0], mu.size()[1], self.hparams.Kl, 6)                           # (batch_size, 1, kl, 6)
         sigma = sigma.view(sigma.size()[0], sigma.size()[1], self.hparams.Kl, 6)
 
         sigma = sigma * temperature
 
         # print(f'shape of lattice {lattice.shape}, shape of mu {mu.shape}, shape of sigme {sigma.shape}')
         logp_l = -(lattice - mu) ** 2 / (2 * sigma ** 2) - torch.log(sigma) - 0.5 * math.log(2 * math.pi)
+        l_logit = l_logit.unsqueeze(-1).repeat(1, 1, 1, 6)
+        logp_l = torch.logsumexp(l_logit + logp_l, dim=-2) # (batch_size, 1, 6)
         logp_l = torch.sum(torch.where(lattice_mask, logp_l, torch.zeros_like(logp_l)), dim=-1)
-        logp_l = torch.logsumexp(l_logit + logp_l, dim=-1).squeeze()
 
         logp_a = torch.sum(logp_a, dim=-1)
         logp_w = torch.sum(logp_w, dim=-1)
+        logp_l = torch.sum(logp_l, dim=-1)
 
         if without_xyzl:
             logp = logp_w + logp_a
@@ -465,14 +468,18 @@ class CrystalFormer(BaseModule):
 
     def von_mises_logpdf(self, x, loc, concentration):
         '''
-        kappa is the concentration. kappa = 0 means uniform distribution
-        '''
-        i0 = torch.special.i0e(concentration)
-        log_i0 = torch.log(i0)
+        Compute log-pdf of von Mises distribution:
+        x, loc: shape [batch, n, K]
+        concentration: shape [batch, n, K] or broadcastable
 
-        x = x.unsqueeze(-1).repeat(1, 1, loc.size()[-1])
-        log_pdf = -math.log(2*math.pi) - log_i0 + \
-                  concentration * (torch.cos(torch.remainder(x - loc, (2*math.pi)) - math.pi) - 1) #?????
+        Returns:
+            log_pdf: shape [batch, n, K]
+        '''
+        i0e = torch.special.i0e(concentration)
+        log_i0 = torch.log(i0e) + concentration  # i0e = I0(kappa) / exp(kappa)
+
+        x = x.unsqueeze(-1).repeat(1, 1, loc.size(-1))  # make shape match loc
+        log_pdf = -math.log(2 * math.pi) - log_i0 + concentration * torch.cos(x - loc)
 
         return log_pdf
 

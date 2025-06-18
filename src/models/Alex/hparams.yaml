@@ -1,5 +1,5 @@
 data:
-  root_path: ${oc.env:PROJECT_ROOT}/data/Alex
+  root_path: /data/home/cyye/5-materialgen/7-cdvae/CrystalFormer_torch/data/Alex
   use_exit: true
   preprocess_workers: 40
   n_atom_types: 119
@@ -7,8 +7,8 @@ data:
   n_max: 21
   tol: 0.1
   Nf: 5
-  train_max_epochs: 10000
-  early_stopping_patience: 1000
+  train_max_epochs: 2000
+  early_stopping_patience: 50
   datamodule:
     _target_: CFtorch.pl_data.datamodule.CrystDataModule
     datasets:
@@ -50,9 +50,9 @@ data:
       val: 0
       test: 0
     batch_size:
-      train: 512
-      val: 512
-      test: 512
+      train: 128
+      val: 128
+      test: 128
 logging:
   val_check_interval: 1
   progress_bar_refresh_rate: 20
@@ -68,16 +68,16 @@ model:
   n_grou_types: 230
   n_atom_types: ${data.n_atom_types}
   n_wyck_types: ${data.n_wyck_types}
-  Kx: 16
-  Kl: 4
+  Kx: 96
+  Kl: 24
   h0_size: 256
   transformer_layers: 16
   num_heads: 16
   key_size: 64
-  value_size: 64
-  model_size: 64
-  embed_size: 32
-  dropout_rate: 0.5
+  value_size: 128
+  model_size: 128
+  embed_size: 64
+  dropout_rate: 0.3
   widering_facter: 4
   sigmamin: 0.001
   lamb_a: 1
@@ -86,7 +86,7 @@ model:
 optim:
   optimizer:
     _target_: torch.optim.Adam
-    lr: 0.0001
+    lr: 0.001
     betas:
     - 0.9
     - 0.999
@@ -96,8 +96,8 @@ optim:
   lr_scheduler:
     _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
     factor: 0.6
-    patience: 30
-    min_lr: 1.0e-06
+    patience: 15
+    min_lr: 0.0001
 train:
   deterministic: true
   random_seed: 42
@@ -106,7 +106,7 @@ train:
     fast_dev_run: false
     devices: 4
     strategy: ddp
-    accelerator: cuda
+    accelerator: gpu
     precision: 32
     max_epochs: ${data.train_max_epochs}
     accumulate_grad_batches: 1
@@ -114,6 +114,9 @@ train:
     gradient_clip_val: 0.5
     gradient_clip_algorithm: value
     profiler: simple
+    use_distributed_sampler: true
+    log_every_n_steps: 2000
+    enable_progress_bar: false
   monitor_metric: val_loss
   monitor_metric_mode: min
   early_stopping:

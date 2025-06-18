@@ -3,6 +3,11 @@
   <h2> Materials discovery acceleration by using condition generative methodology</h2> 
 </div>
 
+arXiv: [https://arxiv.org/abs/2505.00076](https://arxiv.org/abs/2505.00076)
+
+data: [https://in.iphy.ac.cn/eln/link.html#/113/G9f5](https://in.iphy.ac.cn/eln/link.html#/113/G9f5)
+
+
 ## Environment
 
 We recommend using Anaconda to manage Python environments. First, create and activate a new Python environment:
@@ -34,16 +39,22 @@ torchmetrics             1.6.3
 For details, you can refer to [PyTorch](https://pytorch.org), [pytorch-geometric](https://pytorch-geometric.readthedocs.io/en/latest/#), [pytorch-lightning](https://lightning.ai/docs/pytorch/stable/).
 
 ## How to run
-After setting up the environment, you can use the model checkpoint we provide to run PODGen for conditional generation of topological materials. However, before that, you need to modify some paths:
+After setting up the environment, you can use the provided model checkpoint to run PODGen for conditional generation of topological materials. Before doing so, make sure to update the necessary environment paths. You can either run the following commands:
 
-The first file is `.env`, which needs to be updated as follows:
+```
+cp .env_bak .env
+bash writeenv.sh
+```
+
+Or, if you prefer, modify the .env file manually. Update it with the following lines, replacing <YOUR_PATH_TO_PODGEN> with the absolute path to your PODGen directory:
+
+
 ```
 export PROJECT_ROOT="<YOUR_PATH_TO_PODGEN>/PODGen"
 export HYDRA_JOBS="<YOUR_PATH_TO_PODGEN>/PODGen/output/hydra"
 export WABDB_DIR="<YOUR_PATH_TO_PODGEN>/PODGen/output/wandb"
 ```
 
-The second file is `conf/gen/MCMC_config.yaml`. You need to modify the following paths in this file: "former_path", "pre_models.model_path", "generate_setting.seed_dataset", and "generate_setting.output_file".
 
 Then you can run the following command to generate crystal structures:
 ```

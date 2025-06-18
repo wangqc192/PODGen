@@ -19,6 +19,8 @@ from scripts.eval_utils import load_model
 from predictor.pre_utils import load_pre_model
 from mcmc_utils import get_temperature_list, get_seed_crystal, data2struc, logp_of_pre, MCMC_setp, logging, sample_2_cif
 from mcmc_utils import sample_list_from_file, saveinannea, loadinannea, add_ele_score
+from CFtorch.common.utils import PROJECT_ROOT
+from omegaconf import OmegaConf
 
 def main(config):
     ################################ Prepare for MCMC ################################
@@ -190,7 +192,9 @@ if __name__ == '__main__':
     parser.add_argument('--config', default='/Users/yecaiyuan/0-project/0-materialgen/0-TF-torch/former1/scripts/MCMC_config_test.yaml', type=str, metavar='N')
     args = parser.parse_args()
 
-    with open(args.config, encoding='utf-8') as rstream:
-        config = yaml.load(rstream, yaml.SafeLoader)
+    # with open(args.config, encoding='utf-8') as rstream:
+    #     config = yaml.load(rstream, yaml.SafeLoader)
+
+    config = OmegaConf.load(args.config)
 
     main(config)

@@ -1,24 +1,31 @@
-former_path: '/data/work/cyye/0-project/11-PODGen/PODGen/src/models/Alex'
-former_file: 'epoch=315-step=230364.ckpt'
+former_path: ${oc.env:PROJECT_ROOT}/src/models/Alex
+former_file: 'epoch=669-step=1951710.ckpt'
 load_middle: ''
 use_old_config: False
 
 pre_models:
-  - model_path: '/data/work/cyye/0-project/11-PODGen/PODGen/src/models/topo'
-    model_file: 'model_topo.pth'
-    target: 3  # TI
+  # - model_path: ${oc.env:PROJECT_ROOT}/src/models/topo
+  #   model_file: 'model_topo.pth'
+  #   target: 3  # TI 
+  #   threshold: 0.2
+  #   alpha: 1.0
+  #   model_name: 'topo model'
+  
+  - model_path: ${oc.env:PROJECT_ROOT}/src/models/topo2
+    model_file: 'model_topo301.pth'
+    target: 2  # TI & TCI 
     threshold: 0.2
     alpha: 1.0
     model_name: 'topo model'
   
-  - model_path: '/data/work/cyye/0-project/11-PODGen/PODGen/src/models/mag'
+  - model_path: ${oc.env:PROJECT_ROOT}/src/models/mag
     model_file: 'model_mag.pth'
     target: 0  
     threshold: 0.7
     alpha: 1.0
     model_name: 'mag model'
   
-  - model_path: '/data/work/cyye/0-project/11-PODGen/PODGen/src/models/metal'
+  - model_path: ${oc.env:PROJECT_ROOT}/src/models/metal
     model_file: 'model_metal.pth'
     target: 0
     threshold: 0.3

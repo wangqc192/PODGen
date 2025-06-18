@@ -7,3 +7,5 @@ output/*
 LogErr
 
 *.sh
+
+testfile
