@@ -506,6 +506,8 @@ def generate(batch_size, model, spacegroup, top_p=1.0, temperature=1.0):
     mult_table_tensor = torch.tensor(mult_table).to(model.device)
 
 
+    if type(spacegroup) == int:
+        spacegroup = torch.tensor([[spacegroup]]).repeat(batch_size,1)
     data['G'] = spacegroup
     data['wyckoff'] = W
     data['atom_type'] = A

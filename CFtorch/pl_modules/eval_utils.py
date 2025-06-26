@@ -20,7 +20,7 @@ import torch.distributions as dist
 
 from CFtorch.common.utils import PROJECT_ROOT
 from CFtorch.pl_modules.model import CrystalFormer
-from CFtorch.common.group_utils import symops
+from CFtorch.common.group_utils import mult_table, symops
 
 def load_model(model_path, model_file=None, load_data=False, testing=True):
     GlobalHydra.instance().clear()  # 清除之前的初始化
@@ -39,7 +39,7 @@ def load_model(model_path, model_file=None, load_data=False, testing=True):
         if load_data:
             print('data information', cfg.data.root_path)
             datamodule = hydra.utils.instantiate(
-                cfg.data.datamodule, _recursive_=False 
+                cfg.data.datamodule, _recursive_=False
             )
             if testing:
                 datamodule.setup('test')
@@ -195,3 +195,169 @@ def data2logp(data, model):
     logp = model.compute_logp(data, h)
 
     return logp
+
+
+#@partial(jax.vmap, in_axes=(None, None, None, 0, 0, 0, 0, 0), out_axes=0) # batch 
+def inference(model, g, W, A, X, Y, Z):
+    XYZ = torch.cat([X[:, None],
+                     Y[:, None],
+                     Z[:, None]
+                     ], 
+                     axis=-1)
+    M = mult_table[g-1, W]
+    return model(None, g, XYZ, A, W, M)
+
+
+def sample_crystal(model, n_max, batchsize, atom_types, wyck_types, Kx, Kl, g, w_mask, atom_mask, top_p, temperature, T1, constraints):
+
+    def body_fn(i, data):
+
+        # (1) W
+        w_logit = model(data)[:, 5*i] # (batchsize, output_size)
+        w_logit = w_logit[:, :wyck_types]
+
+        w = top_p_sampling(w_logit, top_p, temperature)
+        if w_mask is not None:
+            # replace w with the w_mask[i] if it is not None
+            w[:] = w_mask[i]
+        M = mult_table_tensor[g-1, W]
+        data['M'] = M
+        W[:, i] = w
+        data['wyckoff'] = W
+
+        # (2) A
+        h_al = model(data)[:, 5*i+1] # (batchsize, output_size)
+        a_logit = h_al[:, :atom_types]
+        a_logit = a_logit + torch.where(atom_mask[i, :], torch.tensor(0.0), torch.tensor(-1e10)) # enhance the probability of masked atoms (do not need to normalize since we only use it for sampling, not computing logp)
+        _temp = torch.tensor(T1, dtype=torch.float32) if i == 0 else temperature
+        _a = top_p_sampling(a_logit, top_p, _temp)  # use T1 for the first atom type
+        a = A[:, constraints[i]] if constraints[i] < i else _a
+        A[:, i] = a
+
+        lattice_params = h_al[:, atom_types:atom_types+Kl+2*6*Kl]
+        L[:, i] = lattice_params
+
+        # (3) X
+        h_x = model(data)[:, 5*i+2] # (batchsize, output_size)
+        x = sample_x(h_x, Kx, top_p, temperature, batchsize)
+
+        # project to the first WP
+        xyz = torch.cat([x[:, None], 
+                         torch.zeros((batchsize, 1)), 
+                         torch.zeros((batchsize, 1)), 
+                         ], axis=-1) 
+        xyz = project_xyz(g, w, xyz, 0)
+        x = xyz[:, 0]
+        X[:, i] = x
+
+        # (4) Y
+        h_y = model(data)[:, 5*i+3] # (batchsize, output_size)
+        y = sample_x(h_y, Kx, top_p, temperature, batchsize)
+        
+        # project to the first WP
+        xyz = torch.cat([X[:, i][:, None], 
+                         y[:, None], 
+                         torch.zeros((batchsize, 1)), 
+                         ], axis=-1) 
+        xyz = project_xyz(g, w, xyz, 0)
+        y = xyz[:, 1]
+        Y[:, i] = y
+    
+        # (5) Z
+        h_z = model(data)[:, 5*i+4] # (batchsize, output_size)
+        z = sample_x(h_z, Kx, top_p, temperature, batchsize)
+        
+        # project to the first WP
+        xyz = torch.cat([X[:, i][:, None], 
+                         Y[:, i][:, None], 
+                         z[:, None], 
+                         ], dim=-1) 
+        xyz = project_xyz(g, w, xyz, 0)
+        z = xyz[:, 2]
+        Z[:, i] = (z)
+
+        return W, A, X, Y, Z, L
+    
+    data = {}
+    # we wastecomputation time by always working with the maximum length sequence, but we save compilation time
+    W = torch.zeros((batchsize, n_max), dtype=int)
+    A = torch.zeros((batchsize, n_max), dtype=int)
+    X = torch.zeros((batchsize, n_max))
+    Y = torch.zeros((batchsize, n_max))
+    Z = torch.zeros((batchsize, n_max))
+    L = torch.zeros((batchsize, n_max, Kl+2*6*Kl)) # we accumulate lattice params and sample lattice after
+    FTfrac_coor = [fn(2 * torch.pi * XYZ[:, None] * f) for f in range(1, model.hparams.Nf + 1) for fn in
+                   (torch.sin, torch.cos)]
+    FTfrac_coor = torch.squeeze(torch.stack(FTfrac_coor, dim=-1), dim=1)
+
+    mult_table_tensor = torch.tensor(mult_table).to(model.device)
+
+
+    data['G'] = g
+    data['wyckoff'] = W
+    data['atom_type'] = A
+    data['frac_coor'] = XYZ
+    data['FTfrac_coor'] = FTfrac_coor
+    data['lattice'] = L
+    
+    for i in range(n_max):
+        W, A, X, Y, Z, L = body_fn(i, data)
+
+    M = mult_table[g-1, W]
+    num_sites = torch.sum(A!=0, dim=1)
+    num_atoms = torch.sum(M, dim=1)
+
+    l_logit, mu, sigma = torch.split(L[torch.arange(batchsize), num_sites, :], [Kl, Kl+6*Kl], dim=-1)
+
+    # k is (batchsize, ) integer array whose value in [0, Kl) 
+    k = top_p_sampling(l_logit, top_p, temperature)
+
+    mu = mu.reshape(batchsize, Kl, 6)
+    mu = mu[torch.arange(batchsize), k]       # (batchsize, 6)
+    sigma = sigma.reshape(batchsize, Kl, 6)
+    sigma = sigma[torch.arange(batchsize), k] # (batchsize, 6)
+    L = torch.randn((batchsize, 6)) * sigma * torch.sqrt(temperature) + mu # (batchsize, 6)
+
+    #scale length according to atom number since we did reverse of that when loading data
+    length, angle = torch.split(L, 2, dim=-1)
+    length = length * num_atoms[:, None] ** (1/3)
+    angle = angle * (180.0 / torch.pi) # to deg
+    L = torch.cat([length, angle], dim=-1)
+
+    #impose space group constraint to lattice params
+    L = symmetrize_lattice(g, L)  
+
+    XYZ = torch.cat([X[..., None], 
+                     Y[..., None], 
+                     Z[..., None]
+                     ], 
+                     dim=-1)
+
+    return XYZ, A, W, M, L
+
+
+if __name__  == "__main__":
+    from CFtorch.pl_modules.model import CrystalFormer
+    import torch
+    atom_types = 119
+    n_max = 21
+    wyck_types = 28
+    Nf = 5
+    Kx = 16
+    Kl  = 4
+    dropout_rate = 0.3
+    constraints = torch.arange(0,21,1)
+    atom_mask = torch.zeros((atom_types), dtype=int)
+    atom_mask = torch.stack([atom_mask] * 21, axis=0)
+    
+    model, test_data, _ = load_model(Path("/public/home/wangqingchang/PODGen/output/hydra/singlerun/2025-06-24/mp20"),load_data=True)
+    for i in test_data:
+        c = i
+        break
+    G = c['G']
+    L = c['lattice']
+    XYZ = c['frac_coor']
+    A = c['atom_type']
+    W = c['wyckoff']
+
+    sample_crystal(model, n_max, 2, atom_types, wyck_types, Kx, Kl, 225, None, atom_mask, 1, 1, 1, constraints)
