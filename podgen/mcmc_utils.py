@@ -577,7 +577,7 @@ def generate(batch_size, model, spacegroup, top_p=1.0, temperature=1.0):
 
         # (5) Z
         h_z = model(data)
-        h_z = h_z[:, -3, :3 * model.hparams.Kx]
+        h_z = h_z[:, -2, :3 * model.hparams.Kx]
         z = sample_x(h_z, model.hparams.Kx, top_p, temperature, spacegroup.size()[0])
 
         # project to the first WP

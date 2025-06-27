@@ -11,3 +11,6 @@ out
 out1
 *log
 .env
+*.csv
+*ipynb
+temp
