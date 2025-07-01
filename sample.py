@@ -1,6 +1,8 @@
 from pathlib import Path
 import argparse
 import ast
+from collections import Counter
+import multiprocessing
     
 import pandas as pd
 import numpy as np
@@ -44,7 +46,7 @@ def letter_to_number(letter):
     """
     return ord(letter) - ord('a') + 1 if 'a' <= letter <= 'z' else 27 if letter == 'A' else None
 
-def dict_2_df(batch_size, model, spacegroup, top_p=1.0, temperature=1.0, w_mask=None, atom_mask=None):
+def gen(batch_size, model, spacegroup, top_p=1.0, temperature=1.0, w_mask=None, atom_mask=None):
     data = generate(batch_size, model, spacegroup, top_p=1.0, temperature=1.0, w_mask=w_mask, atom_mask=atom_mask)
     data['lattice'].reshape(batch_size,-1)
     data['lattice']=data['lattice'].reshape(batch_size,-1)
@@ -65,29 +67,34 @@ def filt_formula(df, target_formula):
     a = df["A"]
     m = df["M"]
     meeting_idx = []
-    target_formula = Composition(target_formula)
     for i in range(len(a)):
         a_i = [x for x in a[i] if x !=0]
         a_i = [element_list[x] for x in a_i]
-        w_i = [x for x in m[i] if x !=0]
-        gen_formula = Composition(dict(zip(a_i,w_i)))
+        m_i = [x for x in m[i] if x !=0]
+        composition_counter = Counter()
+        for ele, multi in zip(a_i, m_i):
+            composition_counter[ele] += multi
+        gen_formula = Composition(dict(composition_counter))
         if gen_formula.reduced_formula == target_formula.reduced_formula:
+            print(gen_formula)
+            print(target_formula)
             meeting_idx.append(i)
     return df.iloc[meeting_idx]
+
             
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('--model_path', type=str, default="/home/wangqc/PODGen/output/hydra/singlerun/2025-06-24/mp20", help='')
-    parser.add_argument('--output_filename', type=str, default="output.csv", help='')
+    parser.add_argument('--model_path', type=str, default="/home/wangqc/PODGen/output/hydra/singlerun/2025-06-27/mp20", help='')
+    parser.add_argument('--file_for_gen', type=str, default="input.csv", help='')
     parser.add_argument('--batch_size', type=int, default="128",help='')
-    parser.add_argument('--spacegroup', type=int, help='The space group id to be sampled (1-230)')
+    parser.add_argument('--spacegroup', type=int, nargs='+', help='The space group id to be sampled (1-230)')
     parser.add_argument('--top_p', type=float, default=1.0, help='1.0 means un-modified logits, smaller value of p give give less diverse samples')
     parser.add_argument('--temperature', type=float, default=1.0, help='temperature used for sampling')
     parser.add_argument('--wyckoff', type=str, default=None, nargs='+', help='The Wyckoff positions to be sampled, e.g. a, b')
     parser.add_argument('--elements', type=str, default=None, nargs='+', help='name of the chemical elemenets, e.g. Bi, Ti, O')
-    parser.add_argument('--ratio', type=float, default=None, nargs='+', help='ration of formula')
+    parser.add_argument('--formula', type=str, default=None, nargs='+', help='formula e.g. NaCl')
 
     parser.add_argument('--atom_types', type=int, default=119, help='Atom types including the padded atoms')
     parser.add_argument('--n_max', type=int, default=21, help='The maximum number of atoms in the cell')
@@ -95,20 +102,66 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model, _, _ = load_model(Path(args.model_path), load_data=True)
+    if torch.cuda.is_available():
+        model = model.to('cuda')
 
-    if args.elements is not None:
-        idx = [element_dict[e] for e in args.elements]
-        atom_mask = [1] + [1 if a in idx else 0 for a in range(1, args.atom_types)]
-        atom_mask = torch.tensor(atom_mask, dtype=bool)
-        atom_mask = torch.stack([atom_mask] * args.n_max, axis=0)
-        if args.ratio is not None:
-           ele = [e for e in args.elements] 
-           rat = [r for r in args.ratio]
-           target_formula = dict(zip(ele, rat))
-        print ('sampling structure formed by these elements:', args.elements)
-        print (atom_mask)
-        print (atom_mask.shape)
+    if args.file_for_gen is not None:
+        df = pd.read_csv(args.file_for_gen)
+        formula = df['formula'].tolist()
+        spacegroup = df['spacegroup'].tolist()
+        target_formulas = []
+        atom_masks = []
+
+        for i in range(len(formula)):
+            formu = Composition(formula[i])
+            idx = [element_dict[e] for e in formu.as_dict().keys()]
+            atom_mask = [1] + [1 if a in idx else 0 for a in range(1, args.atom_types)]
+            atom_mask = torch.tensor(atom_mask, dtype=bool)
+            atom_mask = torch.stack([atom_mask] * args.n_max, axis=0)
+            atom_masks.append(atom_mask)
+            target_formulas.append(formu)
+        print ('sampling structure formed by these elements:', formula)
+    else:
+        formula = None
+
+
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    #if args.elements is not None:
+        #idx = [element_dict[e] for e in args.elements]
+        #atom_mask = [1] + [1 if a in idx else 0 for a in range(1, args.atom_types)]
+        #atom_mask = torch.tensor(atom_mask, dtype=bool)
+        #atom_mask = torch.stack([atom_mask] * args.n_max, axis=0)
+        #print ('sampling structure formed by these elements:', args.elements)
+        #print (atom_mask)
+        #print (atom_mask.shape)
+        
+    #if args.formula is not None:
+        #target_formulas = []
+        #atom_masks = []
+        #for i in range(len(args.formula)):
+            #formula = Composition(args.formula[i]).as_dict()
+            #idx = [element_dict[e] for e in formula.keys()]
+            #atom_mask = [1] + [1 if a in idx else 0 for a in range(1, args.atom_types)]
+            #atom_mask = torch.tensor(atom_mask, dtype=bool)
+            #atom_mask = torch.stack([atom_mask] * args.n_max, axis=0)
+            #atom_masks.append(atom_mask)
+            #ele = [e for e in formula.keys()] 
+            #rat = [r for r in formula.values()]
+            #target_formula = dict(zip(ele, rat))
+            #target_formulas.append(target_formula)
+        #print(target_formulas)
+        #print ('sampling structure formed by these elements:', args.formula)
+
+        
     if args.wyckoff is not None:
         idx = [letter_to_number(w) for w in args.wyckoff]
         # padding 0 until the length is args.n_max
@@ -119,11 +172,23 @@ if __name__ == "__main__":
         print (w_mask)
     else:
         w_mask = None
+  
     
-    gen_df = dict_2_df(args.batch_size, model, args.spacegroup, top_p=1.0, temperature=1.0, w_mask=w_mask, atom_mask=atom_mask)
-    if args.ratio is not None:
-        gen_df = filt_formula(gen_df, target_formula)  
-    out_path = Path(args.model_path).joinpath(args.output_filename)
-    gen_df.to_csv(out_path)
+    
+    for i in range(len(formula)):
+        gen_df = gen(args.batch_size, model, spacegroup[i], top_p=1.0, temperature=1.0, w_mask=w_mask, atom_mask=atom_masks[i])
+        filt_df = filt_formula(gen_df, target_formulas[i])
+        out_path = Path(args.model_path).joinpath('gen').joinpath(str(i) + '.csv')
+
+        print(out_path)
+        filt_df.to_csv(out_path)
+        print(f"generate {i}")
+    
+    #if formula is not None:
+        #for i in range(len(formula)):
+            #print(target_formulas[i])
+            #filt_df = filt_formula(gen_dfs[i], target_formulas[i])
+            #out_path = Path(args.model_path).joinpath(formula[i] + str(spacegroup[i]) + '.csv')
+            #filt_df.to_csv(out_path)
     
     

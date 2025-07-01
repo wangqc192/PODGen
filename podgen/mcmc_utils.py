@@ -507,7 +507,7 @@ def generate(batch_size, model, spacegroup, top_p=1.0, temperature=1.0, w_mask=N
 
 
     if type(spacegroup) == int:
-        spacegroup = torch.tensor([[spacegroup]]).repeat(batch_size,1)
+        spacegroup = torch.tensor([[spacegroup]]).repeat(batch_size,1).to(model.device)
     data['G'] = spacegroup
     data['wyckoff'] = W
     data['atom_type'] = A
@@ -522,6 +522,7 @@ def generate(batch_size, model, spacegroup, top_p=1.0, temperature=1.0, w_mask=N
         w_logit = w_logit[:, :model.hparams.n_wyck_types]
         w = top_p_sampling(w_logit, top_p, temperature)
         if w_mask is not None:
+            w_mask = w_mask.to(model.device)
             # replace w with the w_mask[i] if it is not None
             w[:, 0] = w_mask[i]
         data['wyckoff'] = torch.cat([data['wyckoff'], w], dim=1)
@@ -538,6 +539,7 @@ def generate(batch_size, model, spacegroup, top_p=1.0, temperature=1.0, w_mask=N
         h_al = model(data)
         a_logit = h_al[:, -5, :model.hparams.n_atom_types]  # .squeeze(1)
         if atom_mask is not None:
+            atom_mask = atom_mask.to(model.device)
             a_logit = a_logit + torch.where(atom_mask[i, :], 0.0, -1e10) # enhance the probability of masked atoms (do not need to normalize since we only use it for sampling, not computing logp)
         hl = h_al[:, -5, model.hparams.n_atom_types:model.hparams.n_atom_types + model.lattice_types].unsqueeze(1)
         L = torch.cat([L, hl], dim=1)
