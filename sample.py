@@ -12,6 +12,7 @@ import torch
 from scripts.eval_utils import load_model
 from podgen.mcmc_utils import generate
 from pymatgen.core import Composition
+from CFtorch.pl_modules.model import CrystalFormer
 
 element_list = [
     # 0
@@ -89,6 +90,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--model_path', type=str, default="/home/wangqc/PODGen/output/hydra/singlerun/2025-06-27/mp20", help='')
     parser.add_argument('--file_for_gen', type=str, default="input.csv", help='')
+    parser.add_argument('--out_dir', type=str, default="gen", help='')
     parser.add_argument('--batch_size', type=int, default="128",help='')
     parser.add_argument('--spacegroup', type=int, nargs='+', help='The space group id to be sampled (1-230)')
     parser.add_argument('--top_p', type=float, default=1.0, help='1.0 means un-modified logits, smaller value of p give give less diverse samples')
@@ -126,41 +128,6 @@ if __name__ == "__main__":
         formula = None
 
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    #if args.elements is not None:
-        #idx = [element_dict[e] for e in args.elements]
-        #atom_mask = [1] + [1 if a in idx else 0 for a in range(1, args.atom_types)]
-        #atom_mask = torch.tensor(atom_mask, dtype=bool)
-        #atom_mask = torch.stack([atom_mask] * args.n_max, axis=0)
-        #print ('sampling structure formed by these elements:', args.elements)
-        #print (atom_mask)
-        #print (atom_mask.shape)
-        
-    #if args.formula is not None:
-        #target_formulas = []
-        #atom_masks = []
-        #for i in range(len(args.formula)):
-            #formula = Composition(args.formula[i]).as_dict()
-            #idx = [element_dict[e] for e in formula.keys()]
-            #atom_mask = [1] + [1 if a in idx else 0 for a in range(1, args.atom_types)]
-            #atom_mask = torch.tensor(atom_mask, dtype=bool)
-            #atom_mask = torch.stack([atom_mask] * args.n_max, axis=0)
-            #atom_masks.append(atom_mask)
-            #ele = [e for e in formula.keys()] 
-            #rat = [r for r in formula.values()]
-            #target_formula = dict(zip(ele, rat))
-            #target_formulas.append(target_formula)
-        #print(target_formulas)
-        #print ('sampling structure formed by these elements:', args.formula)
 
         
     if args.wyckoff is not None:
@@ -188,7 +155,7 @@ if __name__ == "__main__":
                 all_filt_df = pd.concat([all_filt_df, filt_df],ignore_index=True)
             if len(all_filt_df) >= 2:
                 break
-        out_path = Path(args.model_path).joinpath('gen').joinpath(str(i) + '.csv')
+        out_path = Path(args.model_path).joinpath(args.out_dir).joinpath(str(i) + '.csv')
 
         all_filt_df.to_csv(out_path)
         all_filt_df = pd.DataFrame()
