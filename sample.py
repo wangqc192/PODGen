@@ -3,6 +3,7 @@ import argparse
 import ast
 from collections import Counter
 import multiprocessing
+import time
     
 import pandas as pd
 import numpy as np
@@ -174,14 +175,23 @@ if __name__ == "__main__":
         w_mask = None
   
     
-    
+    all_filt_df = pd.DataFrame()
     for i in range(len(formula)):
-        gen_df = gen(args.batch_size, model, spacegroup[i], top_p=1.0, temperature=1.0, w_mask=w_mask, atom_mask=atom_masks[i])
-        filt_df = filt_formula(gen_df, target_formulas[i])
+        start_time = time.time()
+        while True:
+            current_time = time.time()
+            if current_time - start_time > 60:
+                break  
+            gen_df = gen(args.batch_size, model, spacegroup[i], top_p=1.0, temperature=1.0, w_mask=w_mask, atom_mask=atom_masks[i])
+            filt_df = filt_formula(gen_df, target_formulas[i])
+            if len(filt_df) > 0:
+                all_filt_df = pd.concat([all_filt_df, filt_df],ignore_index=True)
+            if len(all_filt_df) >= 2:
+                break
         out_path = Path(args.model_path).joinpath('gen').joinpath(str(i) + '.csv')
 
-        print(out_path)
-        filt_df.to_csv(out_path)
+        all_filt_df.to_csv(out_path)
+        all_filt_df = pd.DataFrame()
         print(f"generate {i}")
     
     #if formula is not None:
