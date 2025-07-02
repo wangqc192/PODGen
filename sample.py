@@ -143,7 +143,19 @@ if __name__ == "__main__":
   
     
     all_filt_df = pd.DataFrame()
-    for i in range(len(formula)):
+    
+    out_dir = Path(args.model_path).joinpath(args.out_dir)
+    if out_dir:
+        csv_files = list(out_dir.glob('*.csv'))
+        csv_files = [int(i.stem) for i in csv_files]
+        finish = max(csv_files)
+        out_dir.joinpath(f'err_after_{finish}').touch()
+        start = finish+1
+    else:   
+        start = 0
+        
+    for i in range(start, len(formula)):
+        print(f"generate {i} start")
         start_time = time.time()
         while True:
             current_time = time.time()
@@ -159,7 +171,7 @@ if __name__ == "__main__":
 
         all_filt_df.to_csv(out_path)
         all_filt_df = pd.DataFrame()
-        print(f"generate {i}")
+        print(f"generate {i} finish")
     
     #if formula is not None:
         #for i in range(len(formula)):
