@@ -599,6 +599,8 @@ def generate(batch_size, model, spacegroup, top_p=1.0, temperature=1.0, w_mask=N
 
     A = data['atom_type']
     num_sites = torch.sum(A != 0, axis=1)
+    if 21 in num_sites.tolist():
+        return {}
     num_atoms = torch.sum(M, axis=1)
 
     trueL = L[torch.arange(batch_size, device=L.device), num_sites, :]

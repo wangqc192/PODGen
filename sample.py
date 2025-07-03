@@ -4,7 +4,8 @@ import ast
 from collections import Counter
 import multiprocessing
 import time
-    
+from tqdm import tqdm
+
 import pandas as pd
 import numpy as np
 import torch
@@ -89,10 +90,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--model_path', type=str, default="/home/wangqc/PODGen/output/hydra/singlerun/2025-06-27/mp20", help='')
-    parser.add_argument('--file_for_gen', type=str, default="input.csv", help='')
+    parser.add_argument('--file_for_gen', type=str, default=None, help='')
     parser.add_argument('--out_dir', type=str, default="gen", help='')
     parser.add_argument('--batch_size', type=int, default="128",help='')
-    parser.add_argument('--spacegroup', type=int, nargs='+', help='The space group id to be sampled (1-230)')
+    parser.add_argument('--batch', type=int, default="1",help='')
+    parser.add_argument('--spacegroup', type=int, help='The space group id to be sampled (1-230)')
     parser.add_argument('--top_p', type=float, default=1.0, help='1.0 means un-modified logits, smaller value of p give give less diverse samples')
     parser.add_argument('--temperature', type=float, default=1.0, help='temperature used for sampling')
     parser.add_argument('--wyckoff', type=str, default=None, nargs='+', help='The Wyckoff positions to be sampled, e.g. a, b')
@@ -108,6 +110,18 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         model = model.to('cuda')
 
+    if args.wyckoff is not None:
+        idx = [letter_to_number(w) for w in args.wyckoff]
+        # padding 0 until the length is args.n_max
+        w_mask = idx + [0]*(args.n_max -len(idx))
+        # w_mask = [1 if w in idx else 0 for w in range(1, args.wyck_types+1)]
+        w_mask = torch.tensor(w_mask, dtype=int)
+        print ('sampling structure formed by these Wyckoff positions:', args.wyckoff)
+        print (w_mask)
+    else:
+        w_mask = None
+
+    #for CSP
     if args.file_for_gen is not None:
         df = pd.read_csv(args.file_for_gen)
         formula = df['formula'].tolist()
@@ -127,57 +141,44 @@ if __name__ == "__main__":
     else:
         formula = None
 
-
-
-        
-    if args.wyckoff is not None:
-        idx = [letter_to_number(w) for w in args.wyckoff]
-        # padding 0 until the length is args.n_max
-        w_mask = idx + [0]*(args.n_max -len(idx))
-        # w_mask = [1 if w in idx else 0 for w in range(1, args.wyck_types+1)]
-        w_mask = torch.tensor(w_mask, dtype=int)
-        print ('sampling structure formed by these Wyckoff positions:', args.wyckoff)
-        print (w_mask)
-    else:
-        w_mask = None
-  
-    
-    all_filt_df = pd.DataFrame()
-    
-    out_dir = Path(args.model_path).joinpath(args.out_dir)
-    if out_dir:
-        csv_files = list(out_dir.glob('*.csv'))
-        csv_files = [int(i.stem) for i in csv_files]
-        finish = max(csv_files)
-        out_dir.joinpath(f'err_after_{finish}').touch()
-        start = finish+1
-    else:   
-        start = 0
-        
-    for i in range(start, len(formula)):
-        print(f"generate {i} start")
-        start_time = time.time()
-        while True:
-            current_time = time.time()
-            if current_time - start_time > 60:
-                break  
-            gen_df = gen(args.batch_size, model, spacegroup[i], top_p=1.0, temperature=1.0, w_mask=w_mask, atom_mask=atom_masks[i])
-            filt_df = filt_formula(gen_df, target_formulas[i])
-            if len(filt_df) > 0:
-                all_filt_df = pd.concat([all_filt_df, filt_df],ignore_index=True)
-            if len(all_filt_df) >= 2:
-                break
-        out_path = Path(args.model_path).joinpath(args.out_dir).joinpath(str(i) + '.csv')
-
-        all_filt_df.to_csv(out_path)
+    if args.file_for_gen is not None:
         all_filt_df = pd.DataFrame()
-        print(f"generate {i} finish")
+        
+        out_dir = Path(args.model_path).joinpath(args.out_dir)
+        if out_dir:
+            csv_files = list(out_dir.glob('*.csv'))
+            csv_files = [int(i.stem) for i in csv_files]
+            finish = max(csv_files)
+            out_dir.joinpath(f'err_after_{finish}').touch()
+            start = finish+1
+        else:   
+            start = 0
+            
+        for i in range(start, len(formula)):
+            print(f"generate {i} start")
+            start_time = time.time()
+            while True:
+                current_time = time.time()
+                if current_time - start_time > 60:
+                    break  
+                gen_df = gen(args.batch_size, model, spacegroup[i], top_p=1.0, temperature=1.0, w_mask=w_mask, atom_mask=atom_masks[i])
+                filt_df = filt_formula(gen_df, target_formulas[i])
+                if len(filt_df) > 0:
+                    all_filt_df = pd.concat([all_filt_df, filt_df],ignore_index=True)
+                if len(all_filt_df) >= 2:
+                    break
+            out_path = Path(args.model_path).joinpath(args.out_dir).joinpath(str(i) + '.csv')
+
+            all_filt_df.to_csv(out_path)
+            all_filt_df = pd.DataFrame()
+            print(f"generate {i} finish")
     
-    #if formula is not None:
-        #for i in range(len(formula)):
-            #print(target_formulas[i])
-            #filt_df = filt_formula(gen_dfs[i], target_formulas[i])
-            #out_path = Path(args.model_path).joinpath(formula[i] + str(spacegroup[i]) + '.csv')
-            #filt_df.to_csv(out_path)
+    if args.spacegroup is not None:
+        df = pd.DataFrame()
+        for i in tqdm(range(args.batch)):
+            gen_df = gen(args.batch_size, model, args.spacegroup)
+            df = pd.concat([df, gen_df], ignore_index=True)
+        df.to_csv(Path(args.model_path).joinpath(f'output_' + str(args.spacegroup) + '.csv'))
     
     
+#python sample.py --batch_size 20 --batch 100 --spacegroup 225

@@ -130,3 +130,5 @@ if __name__ == '__main__':
     parser.add_argument('--num_io_process', type=int, default=40, help='number of process used in multiprocessing io')
     args = parser.parse_args()
     main(args)
+
+#python awl2struct.py --output_path /home/wangqc/PODGen/output/hydra/singlerun/2025-06-27/mp20/ --label 225
