@@ -145,8 +145,8 @@ if __name__ == "__main__":
         all_filt_df = pd.DataFrame()
         
         out_dir = Path(args.model_path).joinpath(args.out_dir)
-        if out_dir:
-            csv_files = list(out_dir.glob('*.csv'))
+        csv_files = list(out_dir.glob('*.csv'))
+        if csv_files:
             csv_files = [int(i.stem) for i in csv_files]
             finish = max(csv_files)
             out_dir.joinpath(f'err_after_{finish}').touch()
