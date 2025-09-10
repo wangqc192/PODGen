@@ -126,6 +126,9 @@ class CrystalFormer(BaseModule):
         dof0_table_tensor = torch.tensor(dof0_table, dtype=torch.bool)
         wmax_table_tensor = wmax_table_tensor.to(self.device)
         dof0_table_tensor = dof0_table_tensor.to(self.device)
+        print('----------------------------------')
+        print((data["wyckoff"]).shape)
+        print('----------------------------------')
         n_max = data['wyckoff'].shape[1]
         batch_size = data['G'].shape[0]
         w_max = wmax_table_tensor[data['G'] - 1].unsqueeze(-1).expand(batch_size, 1, self.hparams.n_wyck_types)                   # [batch_size, 1, n_wyck_types]

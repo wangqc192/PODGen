@@ -151,9 +151,9 @@ def wrapper(idx, n_atom_types, n_wyck_types, n_max, tol):
 def preprocess(input_file, num_workers, n_atom_types, n_wyck_types, n_max, tol=0.01):
     from tqdm import tqdm
 
-    print("load data")
+    print(f"load {input_file}")
     df = pd.read_csv(input_file)
-    print("loaded data")
+    print(f"loaded {input_file}")
 
     # 初始化全局 df
     init_worker(df)

@@ -12,14 +12,14 @@ train_max_epochs: 10000
 early_stopping_patience: 100
 
 datamodule:
-  _target_: CFtorch.pl_data.datamodule.CrystDataModule
+  _target_: CFtorch.pl_data.datamodule_pyg.CrystDataModule
 
   datasets:
     train:
-      _target_: CFtorch.pl_data.dataset_aug.CrystDataset
-      path: ${data.root_path}/train.csv
+      _target_: CFtorch.pl_data.dataset_aug_pyg.CrystDataset
+      root: ${data.root_path}/train
+      filename: train.csv
       use_exit: ${data.use_exit}
-      save_path: ${data.root_path}/train_sym.pt
       preprocess_workers: ${data.preprocess_workers}
       n_atom_types: ${data.n_atom_types}
       n_wyck_types: ${data.n_wyck_types}
@@ -29,10 +29,10 @@ datamodule:
 
 
     val:
-      - _target_: CFtorch.pl_data.dataset_aug.CrystDataset
-        path: ${data.root_path}/val.csv
+      - _target_: CFtorch.pl_data.dataset_aug_pyg.CrystDataset
+        root: ${data.root_path}/val
+        filename: val.csv
         use_exit: ${data.use_exit}
-        save_path: ${data.root_path}/val_sym.pt
         preprocess_workers: ${data.preprocess_workers}
         n_atom_types: ${data.n_atom_types}
         n_wyck_types: ${data.n_wyck_types}
@@ -41,10 +41,10 @@ datamodule:
         Nf: ${data.Nf}
 
     test:
-      - _target_: CFtorch.pl_data.dataset_aug.CrystDataset
-        path: ${data.root_path}/test.csv
+      - _target_: CFtorch.pl_data.dataset_aug_pyg.CrystDataset
+        root: ${data.root_path}/test
+        filename: test.csv
         use_exit: ${data.use_exit}
-        save_path: ${data.root_path}/test_sym.pt
         preprocess_workers: ${data.preprocess_workers}
         n_atom_types: ${data.n_atom_types}
         n_wyck_types: ${data.n_wyck_types}
@@ -59,6 +59,6 @@ datamodule:
     test: 8
 
   batch_size:
-    train: 128
-    val: 128
-    test: 128
+    train: 64
+    val: 64
+    test: 64
