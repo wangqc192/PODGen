@@ -116,7 +116,14 @@ def main(cfg: omegaconf.DictConfig):
     datamodule.setup('fit')
     train_loader = datamodule.train_dataloader()
     for i, batch in enumerate(train_loader):
-        print(i)
+        print(batch['G'].shape)
+        print(batch['num_sites'].shape)
+        print(batch['lattice'].shape)
+        print(batch['FTfrac_coor'].shape)
+        print(batch['wyckoff'].shape)
+        print(batch['atom_type'].shape)
+        print(batch['M'].shape)
+        break
     # import pdb
     # pdb.set_trace()
 

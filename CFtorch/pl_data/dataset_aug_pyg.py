@@ -69,13 +69,13 @@ class CrystDataset(Dataset):
         M = mult_table[data_dict['G'] - 1, data_dict['wyckoff']]
 
         data = Data(
-            G=torch.LongTensor([data_dict['G']]),
-            num_sites=torch.LongTensor([data_dict['num_sites']]),
-            lattice=torch.Tensor(data_dict['lattice']).view(1, -1),
-            frac_coor=torch.Tensor(data_dict['frac_coor']),
-            FTfrac_coor=torch.Tensor(FTfrac_coor),
-            wyckoff=torch.LongTensor(data_dict['wyckoff']),
-            atom_type=torch.LongTensor(data_dict['atom_type']),
-            M=torch.LongTensor(M),
-        )
+            G=torch.LongTensor([data_dict['G']]).unsqueeze(dim=0),
+            num_sites=torch.LongTensor([data_dict['num_sites']]).unsqueeze(dim=0),
+            lattice=torch.Tensor(data_dict['lattice']).unsqueeze(dim=0),
+            frac_coor=torch.Tensor(data_dict['frac_coor']).unsqueeze(dim=0),
+            FTfrac_coor=torch.Tensor(FTfrac_coor).unsqueeze(dim=0),
+            wyckoff=torch.LongTensor(data_dict['wyckoff']).unsqueeze(dim=0),
+            atom_type=torch.LongTensor(data_dict['atom_type']).unsqueeze(dim=0),
+            M=torch.LongTensor(M).unsqueeze(dim=0),
+        )        
         return data

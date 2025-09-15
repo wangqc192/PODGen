@@ -71,7 +71,6 @@ class CrystDataModule(pl.LightningDataModule):
             batch_size=self.batch_size.train,
             num_workers=self.num_workers.train,
             worker_init_fn=worker_init_fn,
-            collate_fn=pyg_collate_fn,   
         )
 
     def val_dataloader(self) -> Sequence[DataLoader]:
@@ -82,7 +81,6 @@ class CrystDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size.val,
                 num_workers=self.num_workers.val,
                 worker_init_fn=worker_init_fn,
-                collate_fn=pyg_collate_fn,   
             )
             for dataset in self.val_datasets
         ]
@@ -95,7 +93,6 @@ class CrystDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size.test,
                 num_workers=self.num_workers.test,
                 worker_init_fn=worker_init_fn,
-                collate_fn=pyg_collate_fn,   
             )
             for dataset in self.test_datasets
         ]

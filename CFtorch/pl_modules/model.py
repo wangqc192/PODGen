@@ -126,9 +126,6 @@ class CrystalFormer(BaseModule):
         dof0_table_tensor = torch.tensor(dof0_table, dtype=torch.bool)
         wmax_table_tensor = wmax_table_tensor.to(self.device)
         dof0_table_tensor = dof0_table_tensor.to(self.device)
-        print('----------------------------------')
-        print((data["wyckoff"]).shape)
-        print('----------------------------------')
         n_max = data['wyckoff'].shape[1]
         batch_size = data['G'].shape[0]
         w_max = wmax_table_tensor[data['G'] - 1].unsqueeze(-1).expand(batch_size, 1, self.hparams.n_wyck_types)                   # [batch_size, 1, n_wyck_types]
@@ -282,6 +279,138 @@ class CrystalFormer(BaseModule):
 
         return h
 
+    @torch.no_grad()
+    def sample(self, batch, top_p=1.0, temperature=1.0):
+        batch_size = batch.num_graphs
+        data = {}
+        W = torch.empty(batch_size, 0).long().to(self.device)
+        A = torch.empty(batch_size, 0).long().to(self.device)
+        XYZ = torch.empty(batch_size, 0, 3).to(self.device)
+        L = torch.empty(batch_size, 0, self.lattice_types).to(self.device)
+        FTfrac_coor = [fn(2 * torch.pi * XYZ[:, None] * f) for f in range(1, self.hparams.Nf + 1) for fn in
+                    (torch.sin, torch.cos)]
+        FTfrac_coor = torch.squeeze(torch.stack(FTfrac_coor, dim=-1), dim=1)
+        mult_table_tensor = torch.tensor(mult_table).to(self.device)
+
+        data['G'] = spacegroup
+        data['wyckoff'] = W
+        data['atom_type'] = A
+        data['frac_coor'] = XYZ
+        data['FTfrac_coor'] = FTfrac_coor
+        data['lattice'] = L
+
+        for i in range(self.hparams.n_max):
+            w_logit = model(data)[:, -1, :]
+            w_logit = w_logit[:, :model.hparams.n_wyck_types]
+            w = top_p_sampling(w_logit, top_p, temperature)
+            if w_mask is not None:
+                w_mask = w_mask.to(model.device)
+                # replace w with the w_mask[i] if it is not None
+                w[:, 0] = w_mask[i]
+            data['wyckoff'] = torch.cat([data['wyckoff'], w], dim=1)
+            M = mult_table_tensor[data['G'].expand(-1, data['wyckoff'].size(1))-1, data['wyckoff']]
+            data['M'] = M
+
+            # (2) A
+            data['atom_type'] = torch.cat([data['atom_type'], torch.zeros((batch_size, 1), device=model.device, dtype=torch.int)], dim=1)
+            data['frac_coor'] = torch.cat([data['frac_coor'], torch.zeros((batch_size, 1, 3), device=model.device)], dim=1)
+            FTfrac_coor = [fn(2 * torch.pi * data['frac_coor'][:, None] * f) for f in range(1, model.hparams.Nf + 1) for fn in (torch.sin, torch.cos)]
+            FTfrac_coor = torch.squeeze(torch.stack(FTfrac_coor, dim=-1), dim=1)
+            data['FTfrac_coor'] = FTfrac_coor
+
+            h_al = model(data)
+            a_logit = h_al[:, -5, :model.hparams.n_atom_types]  # .squeeze(1)
+            if atom_mask is not None:
+                atom_mask = atom_mask.to(model.device)
+                a_logit = a_logit + torch.where(atom_mask[i, :], 0.0, -1e10) # enhance the probability of masked atoms (do not need to normalize since we only use it for sampling, not computing logp)
+            hl = h_al[:, -5, model.hparams.n_atom_types:model.hparams.n_atom_types + model.lattice_types].unsqueeze(1)
+            L = torch.cat([L, hl], dim=1)
+            a = top_p_sampling(a_logit, top_p, temperature)
+            data['atom_type'][:, -1] = a.squeeze()
+
+            # (3) X
+            h_x = model(data)
+            h_x = h_x[:, -4, :3*model.hparams.Kx]
+            x = sample_x(h_x, model.hparams.Kx, top_p, temperature, spacegroup.size()[0])
+
+            # project to the first WP
+            xyz = torch.cat([x,
+                            torch.zeros((batch_size, 1), device=model.device),
+                            torch.zeros((batch_size, 1), device=model.device)], dim=-1)
+
+            xyz = project_xyz(data['G'], w, xyz, 0)
+            x = xyz[:, 0].unsqueeze(1)
+            data['frac_coor'][:, -1, 0] = x.squeeze()
+            FTfrac_coor = [fn(2 * torch.pi * data['frac_coor'][:, None] * f) for f in range(1, model.hparams.Nf + 1) for fn in
+                        (torch.sin, torch.cos)]
+            FTfrac_coor = torch.squeeze(torch.stack(FTfrac_coor, dim=-1), dim=1)
+            data['FTfrac_coor'] = FTfrac_coor
+
+            # (4) Y
+            h_y = model(data)
+            h_y = h_y[:, -3, :3 * model.hparams.Kx]
+            y = sample_x(h_y, model.hparams.Kx, top_p, temperature, spacegroup.size()[0])
+
+            # project to the first WP
+            xyz = torch.cat([x,
+                                    y,
+                                    torch.zeros((batch_size, 1), device=model.device)], dim=-1)
+
+            xyz = project_xyz(data['G'], w, xyz, 0)
+            y = xyz[:, 1].unsqueeze(1)
+            data['frac_coor'][:, -1, 1] = y.squeeze()
+            FTfrac_coor = [fn(2 * torch.pi * data['frac_coor'][:, None] * f) for f in range(1, model.hparams.Nf + 1) for fn in
+                        (torch.sin, torch.cos)]
+            FTfrac_coor = torch.squeeze(torch.stack(FTfrac_coor, dim=-1), dim=1)
+            data['FTfrac_coor'] = FTfrac_coor
+
+            # (5) Z
+            h_z = model(data)
+            h_z = h_z[:, -2, :3 * model.hparams.Kx]
+            z = sample_x(h_z, model.hparams.Kx, top_p, temperature, spacegroup.size()[0])
+
+            # project to the first WP
+            xyz = torch.cat([x, y, z], dim=-1)
+
+            xyz = project_xyz(data['G'], w, xyz, 0)
+            z = xyz[:, 2].unsqueeze(1)
+            data['frac_coor'][:, -1, 2] = z.squeeze()
+            FTfrac_coor = [fn(2 * torch.pi * data['frac_coor'][:, None] * f) for f in range(1, model.hparams.Nf + 1) for fn in (torch.sin, torch.cos)]
+            FTfrac_coor = torch.squeeze(torch.stack(FTfrac_coor, dim=-1), dim=1)
+            data['FTfrac_coor'] = FTfrac_coor
+
+        A = data['atom_type']
+        num_sites = torch.sum(A != 0, axis=1)
+        if 21 in num_sites.tolist():
+            return {}
+        num_atoms = torch.sum(M, axis=1)
+
+        trueL = L[torch.arange(batch_size, device=L.device), num_sites, :]
+        l_logit, mu, sigma = torch.split(trueL,
+                                        [model.hparams.Kl, 6 * model.hparams.Kl, 6 * model.hparams.Kl], dim=-1)
+        sigma = F.softplus(sigma) + model.hparams.sigmamin
+        mu = mu.view(mu.size()[0], model.hparams.Kl, 6)
+        sigma = sigma.view(sigma.size()[0], model.hparams.Kl, 6)
+        k = top_p_sampling(l_logit, top_p, temperature)
+        mu = mu[torch.arange(batch_size), k.squeeze(1), :]
+        sigma = sigma[torch.arange(batch_size), k.squeeze(1), :]
+
+        L = sample_normal(mu, sigma)
+
+        length, angle = torch.split(L, [3, 3], dim=-1)
+        length = length * (num_atoms.unsqueeze(1).repeat(1, 3) ** (1 / 3))
+        angle = angle * (180.0 / np.pi)  # to deg
+        L = torch.cat([length, angle], dim=-1)
+        L = torch.abs(L)
+        L = symmetrize_lattice(spacegroup, L)
+
+        length, angle = torch.split(L, [3, 3], dim=-1)
+        length = length / (num_atoms.unsqueeze(1).repeat(1, 3) ** (1 / 3))
+        angle = angle / (180.0 / np.pi)  # to deg
+        L_sym = torch.cat([length, angle], dim=-1)
+        data['lattice'] = L_sym.unsqueeze(1)
+
+        return data
 
     def compute_stats(self, data, outputs, prefix):
         lattice_mask_table_tensor = torch.tensor(mask, dtype=torch.bool).reshape(230, 6)
