@@ -10,6 +10,7 @@ import torch
 from omegaconf import DictConfig
 from torch.utils.data import Dataset
 from torch_geometric.data import DataLoader
+import h5py
 
 from CFtorch.common.utils import PROJECT_ROOT
 
@@ -30,6 +31,9 @@ def worker_init_fn(id: int):
     # More than 128 bits (4 32-bit words) would be overkill.
     np.random.seed(ss.generate_state(4))
     random.seed(uint64_seed)
+    worker_info = torch.utils.data.get_worker_info()
+    dataset = worker_info.dataset
+    dataset._file = h5py.File(dataset.save_path, 'r')
 
 
 class CrystDataModule(pl.LightningDataModule):

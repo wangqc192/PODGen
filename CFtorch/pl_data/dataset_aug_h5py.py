@@ -23,55 +23,72 @@ class CrystDataset(Dataset):
         self.n_wyck_types = n_wyck_types
         self.n_atom_types = n_atom_types
         self.save_path = save_path
+        self.n_max = n_max
 
         if os.path.exists(save_path) and use_exit:
             pass
         else:
             self.cached_data = preprocess(path,preprocess_workers,n_atom_types,n_wyck_types,n_max,tol)
             #torch.save(self.cached_data, save_path)
-            with h5py.File(self.save_path, 'w') as f:
-                for idx, data in enumerate(self.cached_data):
-                    grp = f.create_group(f'data_{idx}')
-                    grp.create_dataset('G', data=data['G'])
-                    grp.create_dataset('num_sites', data=data['num_sites'])
-                    grp.create_dataset('lattice', data=data['lattice'])
-                    grp.create_dataset('frac_coor', data=data['frac_coor'])
-                    grp.create_dataset('wyckoff', data=data['wyckoff'])
-                    grp.create_dataset('atom_type', data=data['atom_type'])
-
-
-    def __len__(self) -> int:
+            self._write_hdf5(self.cached_data)
         with h5py.File(self.save_path, 'r') as f:
-            num_groups = len(list(f.keys()))
-        return num_groups 
+                    self.length = f['G'].shape[0]
+
+        self._file = None
+
+    def _write_hdf5(self, data_list):
+        N = len(data_list)
+        G_arr = np.zeros((N,), dtype=np.int64)
+        num_sites = np.zeros((N,), dtype=np.int64)
+        lattice_arr = np.zeros((N,6), dtype=np.float32)
+        frac_coor_arr = np.zeros((N,self.n_max,3), dtype=np.float32)
+        wyckoff_arr = np.zeros((N,self.n_max), dtype=np.int64)
+        atom_type_arr = np.zeros((N,self.n_max), dtype=np.int64)
+
+        for i, d in enumerate(data_list):
+            G_arr[i] = d['G']
+            num_sites[i] = d['num_sites']
+            lattice_arr[i] = d['lattice']
+            frac_coor_arr[i] = d['frac_coor']       # 长度 n_max
+            wyckoff_arr[i] = d['wyckoff']           # 长度 n_max
+            atom_type_arr[i] = d['atom_type']       # 长度 n_max
+
+        with h5py.File(self.save_path, 'w') as f:
+            f.create_dataset('G', data=G_arr, chunks=True)
+            f.create_dataset('num_sites', data=num_sites, chunks=True)
+            f.create_dataset('lattice', data=lattice_arr, chunks=True)
+            f.create_dataset('frac_coor', data=frac_coor_arr, chunks=True)
+            f.create_dataset('wyckoff', data=wyckoff_arr, chunks=True)
+            f.create_dataset('atom_type', data=atom_type_arr, chunks=True)
+         
+    def __len__(self) -> int:
+        return self.length 
 
     def __getitem__(self, index):
-        with h5py.File(self.save_path, 'r') as f:
-            grp = f[f"data_{index}"]
-            G = grp['G'][()]
-            num_sites = grp['num_sites'][()]
-            lattice = grp['lattice'][()]
-            frac_coor = grp['frac_coor'][()]
-            wyckoff = grp['wyckoff'][()]
-            atom_type = grp['atom_type'][()]
-            data_dict = {'G': G, 'num_sites': num_sites, 'lattice': lattice, 'frac_coor': frac_coor, 'wyckoff':wyckoff, 'atom_type': atom_type}
+        if self._file is None:
+            self._file = h5py.File(self.save_path, 'r')
 
-        data = data_dict.copy()
+        G = self._file['G'][index]
+        num_sites = self._file['num_sites'][index]
+        lattice = self._file['lattice'][index]
+        frac_coor = self._file['frac_coor'][index]       # 长度 n_max
+        wyckoff = self._file['wyckoff'][index]           # 长度 n_max
+        atom_type = self._file['atom_type'][index]       # 长度 n_max
 
-        FTfrac_coor = [fn(2 * np.pi * data_dict['frac_coor'][:, None] * f) for f in range(1, self.Nf + 1) for fn in
+        FTfrac_coor = [fn(2 * np.pi * frac_coor[:, None] * f) for f in range(1, self.Nf + 1) for fn in
                        (np.sin, np.cos)]
         FTfrac_coor = np.squeeze(np.stack(FTfrac_coor, axis=-1), axis=1)
 
-        M = mult_table[data['G'] - 1, data['wyckoff']]
+        M = mult_table[G - 1, wyckoff]
 
         data = Data(
-                    G=torch.LongTensor([data_dict['G']]).unsqueeze(dim=0),
-                    num_sites=torch.LongTensor([data_dict['num_sites']]).unsqueeze(dim=0),
-                    lattice=torch.Tensor(data_dict['lattice']).unsqueeze(dim=0),
-                    frac_coor=torch.Tensor(data_dict['frac_coor']).unsqueeze(dim=0),
+                    G=torch.LongTensor([G]).unsqueeze(dim=0),
+                    num_sites=torch.LongTensor([num_sites]).unsqueeze(dim=0),
+                    lattice=torch.Tensor(lattice).unsqueeze(dim=0),
+                    frac_coor=torch.Tensor(frac_coor).unsqueeze(dim=0),
                     FTfrac_coor=torch.Tensor(FTfrac_coor).unsqueeze(dim=0),
-                    wyckoff=torch.LongTensor(data_dict['wyckoff']).unsqueeze(dim=0),
-                    atom_type=torch.LongTensor(data_dict['atom_type']).unsqueeze(dim=0),
+                    wyckoff=torch.LongTensor(wyckoff).unsqueeze(dim=0),
+                    atom_type=torch.LongTensor(atom_type).unsqueeze(dim=0),
                     M=torch.LongTensor(M).unsqueeze(dim=0),
                 )
         return data
