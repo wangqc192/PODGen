@@ -6,6 +6,7 @@ from pyxtal.wyckoff_site import Wyckoff_position
 import ast
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from p_tqdm import p_umap
+import pyxtal.symmetry as sym
 
 element_list = [
     # 0
@@ -60,7 +61,7 @@ def row_to_pyxtal(row):
         y = float(row[f"y{i}"])
         z = float(row[f"z{i}"])
         if wp_index != -1:
-            wp = Wyckoff_position.from_group_and_index(spg, wp_index)
+            wp = sym.Group(spg)[wp_index]
             multi = wp.multiplicity
             wyckoff_symbol = f'{multi}{wp.letter}'
             site = [{f"{wyckoff_symbol}": [x,y,z]}]
@@ -128,6 +129,7 @@ def process_one(row, atom_types, wyck_types, n_max, tol):
     l = np.concatenate([abc, angles])
     #print('10')
     result_dict={
+        'aug-id': row['aug-id'],
         'G': g,
         'lattice': l,
         'frac_coor': fc,
@@ -138,15 +140,6 @@ def process_one(row, atom_types, wyck_types, n_max, tol):
     #print('11')
     return result_dict
 
-_global_df = None  
-
-def init_worker(df):
-    global _global_df
-    _global_df = df
-
-def wrapper(idx, n_atom_types, n_wyck_types, n_max, tol):
-    row = _global_df.iloc[idx]
-    return process_one(row, n_atom_types, n_wyck_types, n_max, tol)
 
 def preprocess(input_file, num_workers, n_atom_types, n_wyck_types, n_max, tol=0.01):
     from tqdm import tqdm
@@ -155,20 +148,17 @@ def preprocess(input_file, num_workers, n_atom_types, n_wyck_types, n_max, tol=0
     df = pd.read_csv(input_file)
     print(f"loaded {input_file}")
 
-    # 初始化全局 df
-    init_worker(df)
-
-    unordered_results = list(tqdm(
+    unordered_results = tqdm(
         p_umap(
-            wrapper,
-            range(len(df)),
+            process_one,
+            [df.iloc[idx] for idx in range(len(df))],
             [n_atom_types] * len(df),
             [n_wyck_types] * len(df),
             [n_max] * len(df),
             [tol] * len(df),
-            num_cpus=num_workers
-        ),
-        total=len(df)
-    ))
+            num_cpus=num_workers),total=len(df))
 
-    return unordered_results
+    mpid_to_results = {result['aug-id']: result for result in unordered_results}
+    ordered_results = [mpid_to_results[df.iloc[idx]['aug-id']]
+                        for idx in range(len(df))]
+    return ordered_results
