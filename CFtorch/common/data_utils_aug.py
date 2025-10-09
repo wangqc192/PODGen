@@ -125,7 +125,7 @@ def process_one(row, atom_types, wyck_types, n_max, tol):
                         axis=0)
     #print('9')
     abc = np.array([c.lattice.a, c.lattice.b, c.lattice.c]) / natoms ** (1. / 3.) #The reduced lattice length
-    angles = np.array([c.lattice.alpha, c.lattice.beta, c.lattice.gamma])
+    angles = np.array([c.lattice.alpha, c.lattice.beta, c.lattice.gamma]) * 180 / np.pi
     l = np.concatenate([abc, angles])
     #print('10')
     result_dict={
